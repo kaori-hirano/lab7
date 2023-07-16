@@ -1,7 +1,7 @@
 ---
 title: "Lab 7: Logistic Regression and Support Vector Machines"
-author: "Insert your name here"
-date: "Insert date here"
+author: "Kaori Hirano"
+date: "07/16/20"
 format: pdf
 ---
 
