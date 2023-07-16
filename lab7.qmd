@@ -1,0 +1,62 @@
+---
+title: "Lab 7: Logistic Regression and Support Vector Machines"
+author: "Insert your name here"
+date: "Insert date here"
+format: pdf
+---
+
+# Packages
+
+```{r load-packages}
+# load packages here
+library(doParallel)
+```
+
+# Data  
+
+```{r load-data}
+# load data here
+```
+
+
+# Exercises 
+
+## Data Visualization
+
+### Q1
+
+```{r data-viz1}
+# enter code here
+```
+
+*Description*
+
+```{r data-viz2}
+# enter code here
+```
+
+
+## Train-Test Split
+
+
+## Full Models
+
+### Q5 
+
+```{r gbm-grid}
+# set up parallel processing
+gbm_clusters <- makeCluster(detectCores() - 1)
+registerDoParallel(gbm_clusters)
+
+# grid to search over
+expand.grid(n.trees = c(3000, 5000), 
+            interaction.depth = c(1, 2, 3, 4),
+            shrinkage = 10^(-3:-1),
+            n.minobsinnode = 10)
+
+### ALL OTHER CODE FOR FITTING GBM HERE
+
+# stop cluster when done; this is very important!
+stopCluster(gbm_clusters)
+```
+
