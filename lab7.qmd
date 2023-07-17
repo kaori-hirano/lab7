@@ -10,13 +10,25 @@ format: pdf
 ```{r load-packages}
 # load packages here
 library(doParallel)
+library(tree) # for simple decision trees
+library(ggdendro) # for plotting decision trees using ggplot
+suppressPackageStartupMessages(library(randomForest)) # for random forests
+library(gbm) # for gradient boosting machines
+library(BART) # for Bayesian Additive Regression Trees
+suppressPackageStartupMessages(library(caret)) # for cross-validating GBM
+suppressPackageStartupMessages(library(tidyverse))
+library(patchwork) # for combining ggplots
+suppressPackageStartupMessages(library(pROC))
+suppressPackageStartupMessages(library(ROCR))
+suppressPackageStartupMessages(library(caret))
 ```
 
 # Data  
 
 ```{r load-data}
 # load data here
-d <- load("data/vendor_data.RData")
+load("data/vendor_data.RData")
+
 ```
 
 
@@ -25,19 +37,83 @@ d <- load("data/vendor_data.RData")
 ## Data Visualization
 
 ### Q1
-
+Make a visualization that shows the relationship between our outcome recent_receipt_7
+and one of the predictors that you are interested in. Use an appropriate visualization for the
+comparison you are making. What does your visualization tell you?
 ```{r data-viz1}
-# enter code here
+# plot of paying the fee and the stall type
+ggplot(vendor_data) +
+  geom_bar(aes(x = recent_receipt_7, fill = stall_type), na.rm = TRUE) +
+  theme_classic() +
+  labs(title = 'Fee in last 7 days by days present in market', x = 'Days at Market', y = 'Fee Paid in last 7 days (0 = no, 1 = yes)')
 ```
+This visualization compares whether or not stalls paid the fee based on the stall type. The chart shows us that there are more stalls that did not pay the fee than did pay the fee. Similarly, we can see that among those that did pay the fee, there seem to by more temporary stalls that get taken up/down everyday, uncovered permanent stalls, and covered permanent stalls without a lock than covered permanent stalls without a lock or a tarp/blanket/basket on the ground comparatively to the number that did not pay the fee. We are also able to see the distribution of which stall types are most populous, with many tarp/blanket/basket stalls. 
 
-*Description*
 
 ```{r data-viz2}
-# enter code here
+#| warning: false
+# comparison of days at the market per week and profit
+
+ggplot(vendor_data, aes(x = days_pr_week, y = hh_income_trim_99), na.rm = TRUE) +
+  geom_point() + 
+  geom_jitter() + 
+  theme_classic() + 
+  labs(title = 'Yearly Household Income by Number of Days in the Market', x = 'Days at Market', y = 'Household Income (kwacha)') 
 ```
+This visualization shows us that there doesn't appear to be a notable effect of the number of days a vendor is open at the market and their yearly household income. There are a large number of higher income households from both the 1 day at the market and 7 days at the market, while there are fewer in the 2, 3 and 6 days, with very few higher income households in the 4 and 5 days. This is not what I expected to see as a relationship between household income and days open. 
+
+```{r data-viz3}
+#| warning: false
+# comparison of days at the market per week and profit
+
+ggplot(vendor_data, aes(x = yrs_in_mkt_fix, y = log(profit)), na.rm = TRUE) +
+  geom_point() + 
+  geom_jitter() + 
+  theme_classic() + 
+  labs(title = 'Log Daily Profit by Years in the Market', x = 'Years at Market', y = 'Log Dailiy Profit (kwacha)')+ 
+  geom_smooth()
+```
+There does not appear to be a notable relationship between profit and years at the market. There are many new stalls (less than 10 years) at the market, and fewer older stalls at the market. Among those stalls, there does not appear to be a visible overall change in income as the stall age changes. 
 
 
 ## Train-Test Split
+```{r data-wrangling}
+# creates new df for edited data
+d <- data.frame(vendor_data)
+
+# drops all na for outcome variable
+d <- d %>% drop_na(recent_receipt_7)
+
+# changes recent receipt 7 to a factor
+# and changes to rr because I can't spell receipt
+d <- d %>% mutate(rr = as.factor(recent_receipt_7))
+
+# changes district into factor
+d$district <- as.factor(d$district)
+
+# test/train split
+set.seed(20)
+
+# id col
+d$id <- 1:nrow(d)
+
+# 75 25 split
+train <- d %>% dplyr::sample_frac(0.75)
+test  <- dplyr::anti_join(d, train, by = 'id')
+```
+ANSWER THE WORD QUESTION
+
+```{r model-fitting}
+# I'm not sure if I'm supposed to make a model here???
+```
+### Q3 
+```{r tree}
+Use cross-validation to find the optimal cost-complexity parameter for a single classification
+tree using the tree package. Use 5 folds and set the seed to 21 beforehand.
+Plot the optimal tree. What does it tell you about who had evidence of paying the tax or
+not?
+Then, plot the ROC curve and calculate the accuracy and the AUC for this classifier using the
+test data
 
 
 ## Full Models
