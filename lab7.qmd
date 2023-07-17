@@ -16,6 +16,7 @@ library(doParallel)
 
 ```{r load-data}
 # load data here
+d <- load("data/vendor_data.RData")
 ```
 
 
