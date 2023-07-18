@@ -84,9 +84,8 @@ d <- data.frame(vendor_data)
 # drops all na for outcome variable
 d <- d %>% drop_na(recent_receipt_7)
 
-# changes recent receipt 7 to a factor
-# and changes to rr because I can't spell receipt
-d <- d %>% mutate(rr = as.factor(recent_receipt_7))
+# changes recent receipt 7 to a factor and renames for spelling accuracy
+d$recent_receipt_7 <- as.factor(d$recent_receipt_7)
 
 # changes district into factor
 d$district <- as.factor(d$district)
@@ -94,12 +93,10 @@ d$district <- as.factor(d$district)
 # test/train split
 set.seed(20)
 
-# id col
-d$id <- 1:nrow(d)
-
 # 75 25 split
-train <- d %>% dplyr::sample_frac(0.75)
-test  <- dplyr::anti_join(d, train, by = 'id')
+sample1 <- sample(c(TRUE, FALSE), nrow(d), replace=TRUE, prob=c(0.75,0.25))
+train <- d[sample1, ]
+test <- d[!sample1, ]
 ```
 ANSWER THE WORD QUESTION
 
@@ -107,7 +104,117 @@ ANSWER THE WORD QUESTION
 # I'm not sure if I'm supposed to make a model here???
 ```
 ### Q3 
-```{r tree}
+```{r tree }
+# makes tree for train, no market or id 
+tree_train <- tree(recent_receipt_7 ~ . -market, train)
+
+# gets predictions
+tree_pred <- predict(tree_train, test,
+    type = "class")
+# gets ideal cost-complexity (k) by error rate
+set.seed(21)
+cv_tree <- cv.tree(tree_train, FUN = prune.misclass, K = 5)
+cv_tree
+```
+```{r plot-cv-results-ggplot2}
+tree_data <- data.frame(size = cv_tree$size,
+                        complexity = cv_tree$k,
+                        errors = cv_tree$dev)
+
+p1 <- ggplot(tree_data, aes(x = size, y = errors)) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Tree Size (Terminal Nodes)",
+       y = "Cross-Validation Errors",
+       title = "Panel A: Tree Size vs Errors") +
+  theme_classic()
+
+p2 <- ggplot(tree_data, aes(x = complexity, y = errors)) +
+  geom_point() +
+  geom_line() +
+  labs(x = "Cost-Complexity Parameter",
+       title = "Panel B: Cost vs Errors") +
+  theme_classic()
+
+p1 + p2
+
+```
+
+```{r plot-tree}
+# plot tree function from example code
+
+# defining functions that takes a named list of variable levels and a 
+# column of variable labels and returns properly formatted labels
+format_tree_labels <- function(labels, levels) {
+  sapply(labels, \(x) if(grepl(":", x)) clean_col(x, levels) else clean_lt(x))
+} 
+
+# replace letter positions with actual level labels
+clean_col <- function(x, levels){
+  # split the label into label and levels
+  x <- str_split_1(x, ":")
+  # make new temp objects for the two components
+  var <- x[1]
+  levs_ids <- x[2]
+  # get levels for correct variable
+  levs <- levels[[var]]
+  # get level ids for *relevant* levels
+  levs_ids <- str_split_1(levs_ids, "") 
+  levs_ids <- sapply(levs_ids, \(x) which(letters == x))
+  # cut down levs to only the required levels
+  levs <- levs[levs_ids]
+  # paste everything together and return (immplicitly)
+  paste0(var, ": ", paste0(levs, collapse = ", "))
+}
+
+# space out labels that include only "<"
+clean_lt <- function(x){
+  # split on <, then recombine with spaces before and after <
+  x <- str_split_1(x, "<")
+  paste0(x, collapse = " < ")
+}
+
+plot_tree <- function(model){
+  require(ggdendro)
+  # extract necessary information from tree object so that it is ggplotable
+  tree_data <- dendro_data(model)
+  # create a data frame with the split *values* which dendro_data() doesn't extract
+  frame <- model$frame %>%
+    rownames_to_column(var = "split") %>%
+    mutate(splits = as.data.frame(splits)) %>% 
+    unnest(cols = c(splits)) %>% 
+    filter(var != "<leaf>") %>% 
+    select(cutleft)
+  
+  # add the splits information in, which dendro_data() misses
+  tree_data$labels <- tree_data$labels %>% 
+    bind_cols(frame) %>% 
+    mutate(label = paste0(as.character(label), cutleft),
+           label = format_tree_labels(label, attr(model, "xlevels")))
+      
+  ggplot(segment(tree_data)) +
+    geom_segment(aes(x = x, y = y, xend = xend, yend = yend)) +
+    geom_text(data = label(tree_data), 
+              aes(x = x, y = y, label = label), vjust = -0.5, size = 3) +
+    geom_text(data = leaf_label(tree_data), 
+              aes(x = x, y = y, label = label), vjust = 1.5, size = 2) +
+    theme_dendro()
+}
+
+prune_tree <- prune.misclass(tree_train, best = 5)
+tree_plot <- plot_tree(prune_tree)
+tree_plot + labs(title = "Decision Tree for Market Vendor Data") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+```{r roc-tree}
+tree_pred_tuned <- predict(tree_train, test,
+    type = "class")
+tree_pred_labels <- as.numeric(tree_pred_tuned > 0.5)
+auc(test$recent_receipt_7, tree_pred_tuned)
+```
+
+
 Use cross-validation to find the optimal cost-complexity parameter for a single classification
 tree using the tree package. Use 5 folds and set the seed to 21 beforehand.
 Plot the optimal tree. What does it tell you about who had evidence of paying the tax or
@@ -115,12 +222,55 @@ not?
 Then, plot the ROC curve and calculate the accuracy and the AUC for this classifier using the
 test data
 
+### Q4
+Use the caret package’s cross-validation framework to find the optimal random forest by
+searching over mtry = 10:16 with 5-fold cross-validation.4
+Inside the train() function, also
+add na.action = na.roughfix.
+5 Set the seed to 22 before doing cross-validation.
+```{r rf}
+?randomForest
+set.seed(22)
+forest <- randomForest(recent_receipt_7 ~ . -market, data = train, mtry = 10:16, importance = TRUE)
+?caret::train
+
+```
+
+
+Nicely plot the variable importances for the optimal fit on training data. Plot only the top
+10 most influential variables. Which variables seem most important for predicting whether a
+vendor would be able to present a receipt or not?
+
+
+Then, plot the ROC curve and calculate the accuracy and the AUC for this classifier using the
+test data.
+
+
+# predict.train()
+The way in which caret::train() passes data to the machine learning algorithm chosen
+by the user can complicate prediction in some cases, especially when there are factor level
+predictors. Therefore, instead of calling predict(trained_object$finalModel), which
+will call the predict() method for whatever the class of the finalModel is (in this case
+"randomForest"), you should use predict.train(). In other words, call predict()
+directly on the output of the train() function.
+Set type = "prob" for the ROC curve and the AUC; set it to "raw" when calculating
+the accuracy. In both cases, add na.action = na.roughfix to the predict() function
+call. This is an imperfect solution but prevents NA’s from being dropped.
 
 ## Full Models
 
 ### Q5 
+Use the caret package’s cross-validation framework to do 5-fold cross-validation to find the
+optimal GBM by searching over the parameter grid in the following code chunk. Set the seed
+to 23 before doing so. Inside the train() function, also add na.action = na.pass.
+6 Please
+note that the grid-search cross-validation could take a considerable amount of
+time. To help with this, the code chunk below makes it so that iterations are run in parallel
+– at the same time. This can speed up computation considerabl
 
 ```{r gbm-grid}
+#| warning: false
+
 # set up parallel processing
 gbm_clusters <- makeCluster(detectCores() - 1)
 registerDoParallel(gbm_clusters)
@@ -131,9 +281,62 @@ expand.grid(n.trees = c(3000, 5000),
             shrinkage = 10^(-3:-1),
             n.minobsinnode = 10)
 
-### ALL OTHER CODE FOR FITTING GBM HERE
+
+set.seed(23)
+# define cross-validation
+train_control <- trainControl(method="cv", number = 5)
+# set up tuning grid
+# note that this implies 72 * 10 = 720 model fits!
+tuneGrid_boost <- expand.grid(n.trees = c(1000, 2000, 3000), 
+                              interaction.depth = c(1, 2, 3, 4),
+                              shrinkage = 10^(-4:0),
+                              n.minobsinnode = 10)
+
+best_gbm <- train(recent_receipt_7 ~ ., data = train,
+               trControl = train_control, method="gbm",
+               tuneGrid = tuneGrid_boost,
+               verbose = FALSE,
+               na.action = na.pass)
+# summarize results
+print(best_gbm)
+
+# prints best results
+best_gbm$bestTune
 
 # stop cluster when done; this is very important!
 stopCluster(gbm_clusters)
 ```
+Nicely plot the partial dependence plot between the outcome and customers_pr_day_trim_99.
+What does it tell you about the relationship between the number of customers a vendor reports
+having each day and the probability that the vendor presented a receipt?
+```{r partial-d-plot}
+# getting data frame
+best_gbm_age_partdep <- plot(best_gbm$finalModel, i = "recent_receipt_7", 
+                                          return.grid = TRUE)
+# plotting data frame
+best_gbm_age_partdep %>% 
+  ggplot(aes(x = recent_receipt_7, y = customers_pr_day_trim_99)) +
+  geom_line() +
+  labs(x = "Proportion Built Before 1940",
+       y = "Median Value of Homes ($1000s)",
+       title = "Partial Dependence Plot Of Median Value of Homes vs Age") +
+  theme_bw()
+```
 
+Then, plot the ROC curve and calculate the accuracy and the AUC for this classifier using the
+test data
+```{r roc-gbm-not-done} 
+summary_boston_gbm <- summary(best_gbm$finalModel, plotit = FALSE)
+# make ggplot version
+summary_boston_gbm %>% 
+  # fix ordering by first arranging from low to high (ggplot reverses by default)
+  arrange(rel.inf) %>% 
+  mutate(var = factor(var, levels = var)) %>% 
+  ggplot(aes(x = rel.inf, y = var)) +
+  # can still make plot colorful
+  geom_col(fill = "blue4") +
+  labs(x = "Relative Importance", y = "Variable",
+       title = "Relative Importance Plot",
+       subtitle = "for Optimal GBM fit to Vendor Data") +
+  theme_bw()
+```
