@@ -208,11 +208,20 @@ tree_plot + labs(title = "Decision Tree for Market Vendor Data") +
 
 ```
 ```{r roc-tree}
-tree_pred_tuned <- predict(tree_train, test,
-    type = "class")
-tree_pred_labels <- as.numeric(tree_pred_tuned > 0.5)
-auc(test$recent_receipt_7, tree_pred_tuned)
+# gets predicted 
+predicted_probs <- predict(tree_train, test, type = "vector")[,2]
+
+#gets real values of y
+true <- test$recent_receipt_7
+
+#makes roc 
+roc_obj <- roc(true, predicted_probs)
+
+#plots roc
+plot(roc_obj, main = "ROC Curve", print.auc = TRUE, auc.polygon = TRUE, grid = TRUE)
+
 ```
+The AUC for the single classification tree is .690
 
 
 Use cross-validation to find the optimal cost-complexity parameter for a single classification
@@ -229,10 +238,27 @@ Inside the train() function, also
 add na.action = na.roughfix.
 5 Set the seed to 22 before doing cross-validation.
 ```{r rf}
-?randomForest
+# sets seed
 set.seed(22)
-forest <- randomForest(recent_receipt_7 ~ . -market, data = train, mtry = 10:16, importance = TRUE)
-?caret::train
+
+# sets training parameters
+train_control <- trainControl(method="cv", number = 5)
+
+# gets grid for mtry
+tune_grid <- expand.grid(mtry = c(10,11,12,13,14,15,16))
+
+# editing data to have only numerics because roughfix
+# can only work with numerics
+train_numeric <- train %>% select(female, age, married, educ_num, houses, acres_farmland, bicycles, chickens, goats, basic_cell_phones, smart_phones, days_pr_week, service, yrs_in_mkt_fix, profit, hh_income_trim_99, customers_pr_day_trim_99, vote_intend)
+
+#rough fixes for numeric only 
+train_numeric <- na.roughfix(train_numeric)
+
+# does training
+best_forest <- train(recent_receipt_7 ~ . -market, data = train, trControl = train_control, method="rf",
+               tuneGrid = tune_grid,
+               verbose = FALSE,
+               na.action = na.roughfix)
 
 ```
 
@@ -244,7 +270,22 @@ vendor would be able to present a receipt or not?
 
 Then, plot the ROC curve and calculate the accuracy and the AUC for this classifier using the
 test data.
+```{r roc-rf}
+# gets predicted 
+predicted_probs <- predict.train(best_forest, test, type = "prob", na.action = na.pass)[,2]
 
+#gets real values of y
+true <- test$recent_receipt_7
+
+length(true)
+length(predicted_probs)
+#makes roc 
+roc_obj <- roc(true, predicted_probs)
+
+#plots roc
+plot(roc_obj, main = "ROC Curve", print.auc = TRUE, auc.polygon = TRUE, grid = TRUE)
+
+```
 
 # predict.train()
 The way in which caret::train() passes data to the machine learning algorithm chosen
@@ -292,7 +333,7 @@ tuneGrid_boost <- expand.grid(n.trees = c(1000, 2000, 3000),
                               shrinkage = 10^(-4:0),
                               n.minobsinnode = 10)
 
-best_gbm <- train(recent_receipt_7 ~ ., data = train,
+best_gbm <- train(recent_receipt_7 ~ . -market, data = train,
                trControl = train_control, method="gbm",
                tuneGrid = tuneGrid_boost,
                verbose = FALSE,
@@ -311,32 +352,41 @@ What does it tell you about the relationship between the number of customers a v
 having each day and the probability that the vendor presented a receipt?
 ```{r partial-d-plot}
 # getting data frame
-best_gbm_age_partdep <- plot(best_gbm$finalModel, i = "recent_receipt_7", 
-                                          return.grid = TRUE)
+best_gbm_age_partdep <- plot(best_gbm$finalModel, i = "customers_pr_day_trim_99",  return.grid = TRUE)
 # plotting data frame
 best_gbm_age_partdep %>% 
-  ggplot(aes(x = recent_receipt_7, y = customers_pr_day_trim_99)) +
+  ggplot(aes(x = customers_pr_day_trim_99, y = y)) +
   geom_line() +
-  labs(x = "Proportion Built Before 1940",
-       y = "Median Value of Homes ($1000s)",
-       title = "Partial Dependence Plot Of Median Value of Homes vs Age") +
+  labs(x = "Customers Per Day",
+       y = "Paying Fee in Past 7 Days",
+       title = "Partial Dependence Plot Of Paying Fee in Past 7 Days by Customers Per Day") +
   theme_bw()
 ```
+
+This plot illustrates that the marginal effect of the number of customers per day is decreasing the likelihood of presenting a receipt after integrating the effects of other variables. 
 
 Then, plot the ROC curve and calculate the accuracy and the AUC for this classifier using the
 test data
 ```{r roc-gbm-not-done} 
-summary_boston_gbm <- summary(best_gbm$finalModel, plotit = FALSE)
-# make ggplot version
-summary_boston_gbm %>% 
-  # fix ordering by first arranging from low to high (ggplot reverses by default)
-  arrange(rel.inf) %>% 
-  mutate(var = factor(var, levels = var)) %>% 
-  ggplot(aes(x = rel.inf, y = var)) +
-  # can still make plot colorful
-  geom_col(fill = "blue4") +
-  labs(x = "Relative Importance", y = "Variable",
-       title = "Relative Importance Plot",
-       subtitle = "for Optimal GBM fit to Vendor Data") +
-  theme_bw()
+# gets predicted 
+predicted_probs <- predict(best_gbm, test, type = "prob", na.action = na.pass)[,2]
+
+#gets real values of y
+true <- test$recent_receipt_7
+
+length(true)
+length(predicted_probs)
+#makes roc 
+roc_obj <- roc(true, predicted_probs)
+
+#plots roc
+plot(roc_obj, main = "ROC Curve", print.auc = TRUE, auc.polygon = TRUE, grid = TRUE)
 ```
+
+The AUC for this classifier using the test data is .716. 
+
+
+
+
+
+
