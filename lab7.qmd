@@ -100,9 +100,7 @@ test <- d[!sample1, ]
 ```
 ANSWER THE WORD QUESTION
 
-```{r model-fitting}
-# I'm not sure if I'm supposed to make a model here???
-```
+
 ### Q3 
 ```{r tree }
 # makes tree for train, no market or id 
@@ -116,6 +114,7 @@ set.seed(21)
 cv_tree <- cv.tree(tree_train, FUN = prune.misclass, K = 5)
 cv_tree
 ```
+
 ```{r plot-cv-results-ggplot2}
 tree_data <- data.frame(size = cv_tree$size,
                         complexity = cv_tree$k,
@@ -141,6 +140,7 @@ p1 + p2
 ```
 
 ```{r plot-tree}
+#| warning: false
 # plot tree function from example code
 
 # defining functions that takes a named list of variable levels and a 
@@ -205,7 +205,6 @@ prune_tree <- prune.misclass(tree_train, best = 5)
 tree_plot <- plot_tree(prune_tree)
 tree_plot + labs(title = "Decision Tree for Market Vendor Data") +
   theme(plot.title = element_text(hjust = 0.5))
-
 ```
 ```{r roc-tree}
 # gets predicted 
@@ -385,8 +384,26 @@ plot(roc_obj, main = "ROC Curve", print.auc = TRUE, auc.polygon = TRUE, grid = T
 
 The AUC for this classifier using the test data is .716. 
 
+### Q6
+####1 
+Is the peformance of any of any of the modeling approaches good, do you think? What might
+this mean?
+None of these methods are great at predicting whether or not a vendor has paid the fee. Based on the AUCs of around .6, they are all barely better than chance (which is .5). This likely means that the data needs a different type of modelling to be better understood. 
 
+Which modeling approach resulted in the best fit? What were the optimal tuning parameters of
+the best-fitting model? What does this tell you about the relationship between the predictors
+and the outcome?
 
+The modelling approach that resulted in the best fit is the GBM, which had an AUC of .716. The optimal tuning parameters of this model were 3000 trees, an interaction depth of 4, shrinkage of .001, and a number of minimum in nodes is 10. This tells us that there are many complex relationships between predictor variables because of the interaction depth, a slow learning process was needed for fitting the optimal model, and the min number of observations in terminal nodes means that we prioritized avoiding overfitting in this model. 
+
+###Q7
+In this homework, we have been working to predict when a Malawian market vendor will pay
+the market tax or not. From the perspective of the government, this would be a great tool,
+because they could potentially identify shirkers ahead of time. But what do you think could
+be some of the downsides of this prediction task? In your opinion, is prediction of this kind
+mostly good idea
+
+Yes, there are downsides to this if used by the government. Some downsides of this prediction task could be that they would devote more resources to enforcing fee payment from one group of vendors more than another which may result in unbalanced enforcement or some groups thinking they can get away with not paying the fee more easily. Similarly, there may be a better way of collecting payment and having a prediction method like this may prevent the government from spending time/money to find a better way of collecting or setting up the fee. In my opinion, I don't think this kind of prediction is mostly a good idea. I don't know more than the homework guide gave us, but to help improve markets this fee seems important and having ways to make fee payment more common will help that. 
 
 
 
